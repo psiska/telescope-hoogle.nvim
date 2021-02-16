@@ -9,20 +9,12 @@ local utils = require'telescope.utils'
 
 local json = require'telescope.json'
 
+local styleTable = {}
+styleTable.pre = 'Comment'
+styleTable.tt = 'Statement'
+styleTable.a = 'Identifier'
+
 local M = {}
-
---[[
- schema is as follows:
- .docs -> String
- .item -> String -- map :: (a -> b) -> [a] -> [b]
- .module.name -> String -- prelude
- .module.url -> String -- https://hackage.haskell.org/package/base/docs/Prelude.html
- .package.name -> String -- base
- .package.url -> String
- .type -> String
- .url -> String -- https://hackage.haskell.org/package/base/docs/Prelude.html#v:map
-]]
-
 local function splitToLines(input, delimiter)
   local result = { }
   local from  = 1
@@ -35,6 +27,91 @@ local function splitToLines(input, delimiter)
   table.insert( result, string.sub( input, from  ) )
   return result
 end
+local function tokenizeHtml(input)
+  local delimiter = '\n'
+  local go = true
+  local cstr = input
+  local result = {}
+  while go do
+    local startIdx, _, tag, _, tagVal, _, rem = cstr:find('<(%w+)>([%s\r\n\t]*)([^<]*)([%s\r\n\t]*)</%w+>(.*)')
+    if startIdx ~= nil then
+      local previous = cstr:sub(0, startIdx - 1)
+      cstr = rem
+      local textR1 = splitToLines(previous, delimiter)
+      for _, v in pairs(textR1) do
+        if #v ~= 0 then
+          table.insert( result, { prev = v })
+          if #textR1 > 1 then table.insert(result, { nl = true }) end
+        end
+      end
+      -- process tag with newlines inside
+      local tagR1 = splitToLines(tagVal, delimiter)
+      for _, v in pairs(tagR1) do
+        table.insert(result , { tag = tag, tagValue = v })
+        if #tagR1 > 1 then table.insert(result, { nl = true }) end
+      end
+    else
+      go = false
+    end
+  end
+  return result
+end
+
+local function renderHtmlForBuffer(input, styleTable)
+  local fullText = ''
+  local currentLine = 0
+  local textResult = {}
+  local highLights = {}
+  for _, v  in pairs(input) do
+    if v.prev ~= nil then
+      fullText = fullText .. v.prev
+    elseif (v.nl ~= nil and v.nl == true) then
+      table.insert(textResult, fullText)
+      fullText = ''
+      currentLine = currentLine + 1
+    elseif (v.tag ~= nil and v.tagValue:len() > 0) then
+      local hl = {}
+      hl.type = styleTable[v.tag] or 'Identifier'
+      hl.line = currentLine
+      hl.beginPos = fullText:len()
+      hl.endPos = fullText:len() + v.tagValue:len()
+      table.insert(highLights, hl)
+      fullText = fullText .. v.tagValue
+    end
+
+    --print("k: " .. vim.inspect(k))
+    --print("v: " .. vim.inspect(v))
+  end
+  if fullText:len() > 0 then table.insert(textResult, fullText) end
+  -- returns full text plus table of offsets to buffer highlight
+  return textResult, highLights
+end
+
+local function previewEntry(entry, buffer)
+  local intr = tokenizeHtml(entry.value)
+  local text, highlightTable = renderHtmlForBuffer(intr, styleTable)
+
+  --log.debug("got lines: "..vim.inspect(buf_lines))
+  vim.api.nvim_buf_set_lines(buffer, 0, -1, true, text)
+  for _,v in pairs(highlightTable) do
+    log.debug("hl: "..vim.inspect(v))
+    vim.api.nvim_buf_add_highlight(buffer, -1, v.type, v.line, v.beginPos, v.endPos)
+  end
+end
+
+--[[
+ schema is as follows:
+ .docs -> String
+ .item -> String -- map :: (a -> b) -> [a] -> [b]
+ .module.name -> String -- prelude
+ .module.url -> String -- https://hackage.haskell.org/package/base/docs/Prelude.html
+ .package.name -> String -- base
+ .package.url -> String
+ .type -> String
+ .url -> String -- https://hackage.haskell.org/package/base/docs/Prelude.html#v:map
+]]
+-- TODO move to some text utils
+
 
 local function gen_from_hoogle(_)
   local displayer = entry_display.create{
@@ -47,18 +124,12 @@ local function gen_from_hoogle(_)
   }
 
   local function make_display(entry)
-    log.debug("make_display:entry: "..vim.inspect(entry))
+    --log.debug("make_display:entry: "..vim.inspect(entry))
     return displayer{
       {entry.module, 'HaskellModule'},
       {entry.package, 'HaskellPackage'},
       entry.ordinal,
     }
-  end
-
-  local function previewEntry(entry, buffer)
-    local buf_lines = splitToLines(entry.value, '\n')
-    --log.debug("got lines: "..vim.inspect(buf_lines))
-    vim.api.nvim_buf_set_lines(buffer, 0, -1, true, buf_lines)
   end
 
   return function(line)
