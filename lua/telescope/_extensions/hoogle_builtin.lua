@@ -9,6 +9,7 @@ local previewers = require'telescope.previewers'
 local utils = require'telescope.utils'
 
 local json = require'telescope.json'
+local html = require'telescope._extensions.hoogle.html'
 
 local styleTable = {}
 styleTable.pre = 'Comment'
@@ -67,7 +68,7 @@ local function renderHtmlForBuffer(input, styleTable)
     if v.prev ~= nil then
       fullText = fullText .. v.prev
     elseif (v.nl ~= nil and v.nl == true) then
-      table.insert(textResult, fullText)
+      table.insert(textResult, html.decode(fullText))
       fullText = ''
       currentLine = currentLine + 1
     elseif (v.tag ~= nil and v.tagValue:len() > 0) then
