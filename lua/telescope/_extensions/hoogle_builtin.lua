@@ -139,6 +139,7 @@ local function gen_from_hoogle(_)
       type_sig = v['item'],
       package = v['package']['name'],
       ordinal = v['item'],
+      url = v['url'] or "",
       display = make_display,
       preview_command = previewEntry
     }
@@ -152,15 +153,17 @@ local function copy_to_clipboard(text)
 end
 
 local function open_browser(url)
-  local browser_cmd
-  if vim.fn.has('unix') == 1 then
-    browser_cmd = 'sensible-browser'
-  end
-  if vim.fn.has('mac') == 1 then
-    browser_cmd = 'open'
-  end
+  if url ~= "" then
+    local browser_cmd
+    if vim.fn.has('unix') == 1 then
+      browser_cmd = 'sensible-browser'
+    end
+    if vim.fn.has('mac') == 1 then
+      browser_cmd = 'open'
+    end
 
-  vim.cmd(':silent !' .. browser_cmd .. ' ' .. vim.fn.fnameescape(url))
+    vim.cmd(':silent !' .. browser_cmd .. ' ' .. vim.fn.fnameescape(url))
+  end
 end
 
 
