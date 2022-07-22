@@ -9,7 +9,8 @@ local previewers = require'telescope.previewers'
 local utils = require'telescope.utils'
 
 local json = require'telescope.json'
-local html = require'telescope._extensions.hoogle.html'
+local tsrender = require'hoogle.treesitter'
+local html = require'hoogle.html'
 
 local styleTable = {}
 styleTable.pre = 'Comment'
@@ -17,6 +18,9 @@ styleTable.tt = 'Statement'
 styleTable.a = 'Identifier'
 
 local M = {}
+
+M.ext_config = {}
+
 local function splitToLines(input, delimiter)
   local result = { }
   local from  = 1
@@ -29,6 +33,7 @@ local function splitToLines(input, delimiter)
   table.insert( result, string.sub( input, from  ) )
   return result
 end
+
 local function tokenizeHtml(input)
   local delimiter = '\n'
   local go = true
@@ -84,17 +89,28 @@ local function renderHtmlForBuffer(input, styleTable)
     --print("k: " .. vim.inspect(k))
     --print("v: " .. vim.inspect(v))
   end
-  if fullText:len() > 0 then table.insert(textResult, fullText) end
+  if fullText:len() > 0 then table.insert(textResult, html.decode(fullText)) end
   -- returns full text plus table of offsets to buffer highlight
   return textResult, highLights
 end
 
+local function defaultRender(input, _)
+  local intr = tokenizeHtml(input)
+  return renderHtmlForBuffer(intr, styleTable)
+end
+
 local function previewEntry(entry, buffer)
-  local intr = tokenizeHtml(entry.value)
-  local text, highlightTable = renderHtmlForBuffer(intr, styleTable)
+  local renders = {
+    default = defaultRender,
+    treesitter = tsrender.render,
+  }
+
+  local render = M.ext_config.render or 'default'
+  local renderConfig = M.ext_config.renders and M.ext_config.renders[render] or {}
+  local buf_lines, highlightTable = (renders[render] or error("no render named as " .. render))(entry.value, renderConfig)
 
   --log.debug("got lines: "..vim.inspect(buf_lines))
-  vim.api.nvim_buf_set_lines(buffer, 0, -1, true, text)
+  vim.api.nvim_buf_set_lines(buffer, 0, -1, true, buf_lines)
   for _,v in pairs(highlightTable) do
     log.debug("hl: "..vim.inspect(v))
     vim.api.nvim_buf_add_highlight(buffer, -1, v.type, v.line, v.beginPos, v.endPos)
