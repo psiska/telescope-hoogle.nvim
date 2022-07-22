@@ -8,9 +8,9 @@ local pickers = require'telescope.pickers'
 local previewers = require'telescope.previewers'
 local utils = require'telescope.utils'
 
-local json = require'telescope.json'
-local tsrender = require'hoogle.treesitter'
-local html = require'hoogle.html'
+local json = require'telescope-hoogle.json'
+local tsrender = require'telescope-hoogle.treesitter'
+local html = require'telescope-hoogle.html'
 
 local styleTable = {}
 styleTable.pre = 'Comment'

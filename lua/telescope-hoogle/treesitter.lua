@@ -1,4 +1,4 @@
-local html = require'hoogle.html'
+local html = require'telescope-hoogle.html'
 
 local M = {}
 
